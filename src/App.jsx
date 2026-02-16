@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
-import { OrbitControls, Environment, SoftShadows } from '@react-three/drei';
+import { OrbitControls, Environment, SoftShadows, Html } from '@react-three/drei';
 import { TextureLoader, Vector3, Matrix4 } from 'three';
 import * as THREE from 'three';
 import swal from 'sweetalert';
@@ -179,15 +179,17 @@ function App() {
   const nekoFallAnimationRef = useRef();
   const endEffectorRef = useRef();
 
+  {/* Parámetros  */}
   const MIN_HEIGHT = 3.0;
   const MAX_HEIGHT = 6.5;
   const deltaStep = 0.1;
-  const LINK1_LENGTH = 4;
+  const LINK1_LENGTH = 5;
   const LINK2_LENGTH = 3;
-  const MIN_ARM_DEG = -180;
-  const MAX_ARM_DEG = 180;
+  const MIN_ARM_DEG = -85;
+  const MAX_ARM_DEG = 195;
   const ARM1_FIXED_ROTATION = 0;
 
+  {/* Cinemática directa */}
   const computeForwardKinematics = (rot2, height, globalRot) => {
     const localX = LINK1_LENGTH + (LINK2_LENGTH * Math.cos(rot2));
     const localY = height;
@@ -202,29 +204,67 @@ function App() {
       z: (-localX * sinG) + (localZ * cosG)
     };
   };
+  {/* Cinemática inversa */}
+  const normalizeAngle = (angle) => {
+    let result = angle;
+    while (result > Math.PI) result -= Math.PI * 2;
+    while (result < -Math.PI) result += Math.PI * 2;
+    return result;
+  };
 
-  const solveInverseKinematics = (targetGlobal, globalRot) => {
-    const cosG = Math.cos(-globalRot);
-    const sinG = Math.sin(-globalRot);
-
-    const localX = (targetGlobal.x * cosG) + (targetGlobal.z * sinG);
-    const localZ = (-targetGlobal.x * sinG) + (targetGlobal.z * cosG);
+  const solveInverseKinematics = (targetGlobal, currentState) => {
     const desiredHeight = targetGlobal.y;
     const clampedHeight = Math.min(Math.max(desiredHeight, MIN_HEIGHT), MAX_HEIGHT);
+    const heightClamped = Math.abs(clampedHeight - desiredHeight) > 0.001;
 
-    const radialDistance = Math.sqrt(((localX - LINK1_LENGTH) ** 2) + (localZ ** 2));
-    if (Math.abs(radialDistance - LINK2_LENGTH) > 0.15) {
-      return { error: 'El punto objetivo esta fuera del alcance del brazo 2.' };
+    const radius = Math.sqrt((targetGlobal.x ** 2) + (targetGlobal.z ** 2));
+    const minReach = Math.abs(LINK1_LENGTH - LINK2_LENGTH);
+    const maxReach = LINK1_LENGTH + LINK2_LENGTH;
+    const reachTolerance = 0.15;
+
+    if (radius < minReach - reachTolerance || radius > maxReach + reachTolerance) {
+      return { error: 'El punto objetivo esta fuera del alcance del robot.' };
     }
 
-    const cos2 = (localX - LINK1_LENGTH) / LINK2_LENGTH;
-    const sin2 = -localZ / LINK2_LENGTH;
-    const theta2 = Math.atan2(sin2, cos2);
+    const cos2 = (radius ** 2 - (LINK1_LENGTH ** 2) - (LINK2_LENGTH ** 2)) / (2 * LINK1_LENGTH * LINK2_LENGTH);
+    const clampedCos2 = Math.max(-1, Math.min(1, cos2));
+    const theta2Options = [Math.acos(clampedCos2), -Math.acos(clampedCos2)];
+
+    const worldAngle = Math.atan2(targetGlobal.z, targetGlobal.x);
+    const solutions = theta2Options.map((theta2) => {
+      const localX = LINK1_LENGTH + (LINK2_LENGTH * Math.cos(theta2));
+      const localZ = -LINK2_LENGTH * Math.sin(theta2);
+      const localAngle = Math.atan2(localZ, localX);
+      const globalRot = normalizeAngle(localAngle - worldAngle);
+
+      const forward = computeForwardKinematics(theta2, clampedHeight, globalRot);
+      const error = Math.hypot(forward.x - targetGlobal.x, forward.z - targetGlobal.z);
+
+      return {
+        theta2,
+        globalRot,
+        error,
+      };
+    });
+
+    const sorted = solutions
+      .filter((solution) => solution.error <= reachTolerance)
+      .sort((a, b) => {
+        const costA = Math.abs(a.theta2 - currentState.rotationArm2) + Math.abs(a.globalRot - currentState.globalRotation);
+        const costB = Math.abs(b.theta2 - currentState.rotationArm2) + Math.abs(b.globalRot - currentState.globalRotation);
+        return costA - costB;
+      });
+
+    const best = sorted[0];
+    if (!best) {
+      return { error: 'El punto objetivo no es consistente con la geometria del modelo.' };
+    }
 
     return {
-      theta2,
+      theta2: best.theta2,
+      globalRotation: best.globalRot,
       height: clampedHeight,
-      heightClamped: Math.abs(clampedHeight - desiredHeight) > 0.001
+      heightClamped,
     };
   };
 
@@ -466,7 +506,10 @@ function App() {
       return;
     }
 
-    const result = solveInverseKinematics({ x, y, z }, globalRotation);
+    const result = solveInverseKinematics(
+      { x, y, z },
+      { rotationArm2, globalRotation }
+    );
     if (result.error) {
       swal("IK no resuelta", result.error, "error");
       return;
@@ -478,6 +521,7 @@ function App() {
 
     setArmHeight(result.height);
     setRotationArm2(result.theta2);
+    setGlobalRotation(result.globalRotation);
   };
 
   useEffect(() => {
@@ -1217,6 +1261,26 @@ function App() {
         <pointLight position={[0, 15, 0]} intensity={1.5} color="#4466ff" distance={30} />
         <gridHelper args={[20, 20]} position={[0, 0, 0]} />
         <axesHelper args={[5]} />
+        <group>
+          <Html position={[10, 0, 0]} center>
+            <div style={{ color: '#e74c3c', fontWeight: 'bold' }}>+X</div>
+          </Html>
+          <Html position={[-10, 0, 0]} center>
+            <div style={{ color: '#e74c3c', fontWeight: 'bold' }}>-X</div>
+          </Html>
+          <Html position={[0, 8, 0]} center>
+            <div style={{ color: '#27ae60', fontWeight: 'bold' }}>+Y</div>
+          </Html>
+          <Html position={[0, -0.6, 0]} center>
+            <div style={{ color: '#27ae60', fontWeight: 'bold' }}>-Y</div>
+          </Html>
+          <Html position={[0, 0, 10]} center>
+            <div style={{ color: '#2980b9', fontWeight: 'bold' }}>+Z</div>
+          </Html>
+          <Html position={[0, 0, -10]} center>
+            <div style={{ color: '#2980b9', fontWeight: 'bold' }}>-Z</div>
+          </Html>
+        </group>
         <group rotation={[0, globalRotation, 0]}>
           <SCARA 
             rotationArm1={ARM1_FIXED_ROTATION} 
