@@ -169,6 +169,9 @@ function App() {
   const [armHeightInput, setArmHeightInput] = useState(armHeight.toString());
   const [arm2Input, setArm2Input] = useState(Math.round(rotationArm2 * (180 / Math.PI)).toString());
   const [globalRotationInput, setGlobalRotationInput] = useState(Math.round(globalRotation * (180 / Math.PI)).toString());
+  const [targetXInput, setTargetXInput] = useState('0.00');
+  const [targetYInput, setTargetYInput] = useState('0.00');
+  const [targetZInput, setTargetZInput] = useState('0.00');
 
   const orbitControlsRef = useRef();
   const animationRef = useRef();
@@ -176,15 +179,60 @@ function App() {
   const nekoFallAnimationRef = useRef();
   const endEffectorRef = useRef();
 
-  const MIN_HEIGHT = 3.5;
+  const MIN_HEIGHT = 3.0;
   const MAX_HEIGHT = 6.5;
   const deltaStep = 0.1;
+  const LINK1_LENGTH = 4;
+  const LINK2_LENGTH = 3;
+  const MIN_ARM_DEG = -180;
+  const MAX_ARM_DEG = 180;
+  const ARM1_FIXED_ROTATION = 0;
+
+  const computeForwardKinematics = (rot2, height, globalRot) => {
+    const localX = LINK1_LENGTH + (LINK2_LENGTH * Math.cos(rot2));
+    const localY = height;
+    const localZ = -LINK2_LENGTH * Math.sin(rot2);
+
+    const cosG = Math.cos(globalRot);
+    const sinG = Math.sin(globalRot);
+
+    return {
+      x: (localX * cosG) + (localZ * sinG),
+      y: localY,
+      z: (-localX * sinG) + (localZ * cosG)
+    };
+  };
+
+  const solveInverseKinematics = (targetGlobal, globalRot) => {
+    const cosG = Math.cos(-globalRot);
+    const sinG = Math.sin(-globalRot);
+
+    const localX = (targetGlobal.x * cosG) + (targetGlobal.z * sinG);
+    const localZ = (-targetGlobal.x * sinG) + (targetGlobal.z * cosG);
+    const desiredHeight = targetGlobal.y;
+    const clampedHeight = Math.min(Math.max(desiredHeight, MIN_HEIGHT), MAX_HEIGHT);
+
+    const radialDistance = Math.sqrt(((localX - LINK1_LENGTH) ** 2) + (localZ ** 2));
+    if (Math.abs(radialDistance - LINK2_LENGTH) > 0.15) {
+      return { error: 'El punto objetivo esta fuera del alcance del brazo 2.' };
+    }
+
+    const cos2 = (localX - LINK1_LENGTH) / LINK2_LENGTH;
+    const sin2 = -localZ / LINK2_LENGTH;
+    const theta2 = Math.atan2(sin2, cos2);
+
+    return {
+      theta2,
+      height: clampedHeight,
+      heightClamped: Math.abs(clampedHeight - desiredHeight) > 0.001
+    };
+  };
 
   useEffect(() => {
     const computeMatrices = () => {
       const globalRotY = new Matrix4().makeRotationY(globalRotation);
       const translateY = new Matrix4().makeTranslation(0, armHeight, 0);
-      const rotateZ = new Matrix4().makeRotationZ(rotationArm1);
+      const rotateZ = new Matrix4().makeRotationZ(ARM1_FIXED_ROTATION);
       const translateX4 = new Matrix4().makeTranslation(4, 0, 0);
       const rotateY = new Matrix4().makeRotationY(rotationArm2);
       const translateX3 = new Matrix4().makeTranslation(3, 0, 0);
@@ -211,7 +259,7 @@ function App() {
     };
 
     computeMatrices();
-  }, [globalRotation, armHeight, rotationArm1, rotationArm2]);
+  }, [globalRotation, armHeight, rotationArm2]);
 
   useEffect(() => {
     setArmHeightInput(armHeight.toString());
@@ -234,6 +282,12 @@ function App() {
       cancelAnimationFrame(nekoFallAnimationRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (rotationArm1 !== ARM1_FIXED_ROTATION) {
+      setRotationArm1(ARM1_FIXED_ROTATION);
+    }
+  }, [rotationArm1]);
 
   const calculateCoordinates = () => {
     if (!endEffectorRef.current) {
@@ -296,9 +350,9 @@ function App() {
     
     const numericValue = parseFloat(value);
     if (!isNaN(numericValue)) {
-      const clampedValue = Math.round(Math.max(0, Math.min(numericValue, 180)));
+      const clampedValue = Math.round(Math.max(MIN_ARM_DEG, Math.min(numericValue, MAX_ARM_DEG)));
       if (clampedValue !== numericValue) {
-        swal("Límite excedido", "El brazo 2 debe estar entre 0° y 180°", "warning");
+        swal("Limite excedido", `El brazo 2 debe estar entre ${MIN_ARM_DEG}° y ${MAX_ARM_DEG}°`, "warning");
       }
       const radians = (clampedValue * Math.PI) / 180;
       setRotationArm2(radians);
@@ -313,11 +367,11 @@ function App() {
     }
     const numericValue = parseFloat(arm2Input);
     if (isNaN(numericValue)) {
-      swal("Entrada inválida", "Debe ingresar un número válido", "error");
+      swal("Entrada invalida", "Debe ingresar un numero valido", "error");
       setArm2Input(Math.round(rotationArm2 * (180 / Math.PI)).toString());
       return;
     }
-    const clampedValue = Math.round(Math.max(0, Math.min(numericValue, 180)));
+    const clampedValue = Math.round(Math.max(MIN_ARM_DEG, Math.min(numericValue, MAX_ARM_DEG)));
     const radians = (clampedValue * Math.PI) / 180;
     setRotationArm2(radians);
     setArm2Input(clampedValue.toString());
@@ -392,8 +446,43 @@ function App() {
   const rotateRedArm = (direction) => {
     const delta = direction === 'left' ? deltaStep : -deltaStep;
     recordAction({ action: 'rotateRedArm', delta, direction });
-    setRotationArm2(prev => Math.max(0, Math.min(prev + delta, Math.PI)));
+    setRotationArm2(prev => Math.max(-Math.PI, Math.min(prev + delta, Math.PI)));
   };
+
+  const updateTargetFromCurrent = () => {
+    const current = computeForwardKinematics(rotationArm2, armHeight, globalRotation);
+    setTargetXInput(current.x.toFixed(2));
+    setTargetYInput(current.y.toFixed(2));
+    setTargetZInput(current.z.toFixed(2));
+  };
+
+  const applyInverseKinematics = () => {
+    const x = parseFloat(targetXInput);
+    const y = parseFloat(targetYInput);
+    const z = parseFloat(targetZInput);
+
+    if ([x, y, z].some(value => Number.isNaN(value))) {
+      swal("Entrada invalida", "Debe ingresar valores numericos en X, Y y Z", "error");
+      return;
+    }
+
+    const result = solveInverseKinematics({ x, y, z }, globalRotation);
+    if (result.error) {
+      swal("IK no resuelta", result.error, "error");
+      return;
+    }
+
+    if (result.heightClamped) {
+      swal("Altura ajustada", "La altura se ajusto al rango permitido.", "warning");
+    }
+
+    setArmHeight(result.height);
+    setRotationArm2(result.theta2);
+  };
+
+  useEffect(() => {
+    updateTargetFromCurrent();
+  }, []);
   const soltarNeko = () => {
     if (isFalling || hasFallen) return;
     
@@ -450,7 +539,7 @@ function App() {
     }
     
     if (recordingStart) {
-      setRotationArm1(recordingStart.rotationArm1);
+      setRotationArm1(ARM1_FIXED_ROTATION);
       setRotationArm2(recordingStart.rotationArm2);
       setArmHeight(recordingStart.armHeight);
       setGlobalRotation(recordingStart.globalRotation);
@@ -479,7 +568,7 @@ function App() {
             setGlobalRotation(prev => prev + action.delta);
             break;
           case 'rotateRedArm':
-            setRotationArm2(prev => Math.max(0, Math.min(prev + action.delta, Math.PI)));
+            setRotationArm2(prev => Math.max(-Math.PI, Math.min(prev + action.delta, Math.PI)));
             break;
           case 'soltarNeko':
             setNekoPos(new Vector3(action.position.x, action.position.y, action.position.z));
@@ -556,7 +645,7 @@ function App() {
         }
   
         // Actualizar estados principales
-        setRotationArm1(config.rotationArm1);
+        setRotationArm1(ARM1_FIXED_ROTATION);
         setRotationArm2(config.rotationArm2);
         setArmHeight(config.armHeight);
         setGlobalRotation(config.globalRotation);
@@ -578,6 +667,7 @@ function App() {
   };
   
   //!Fin de exportacion
+  const forwardPosition = computeForwardKinematics(rotationArm2, armHeight, globalRotation);
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <div style={{
@@ -630,8 +720,8 @@ function App() {
                   onChange={handleArm2Input}
                   onBlur={handleArm2Blur}
                   onKeyPress={(e) => handleKeyPress(e, handleArm2Blur)}
-                  min="0"
-                  max="180"
+                  min={MIN_ARM_DEG}
+                  max={MAX_ARM_DEG}
                   step="1"
                   style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '12px' }}
                 />
@@ -683,7 +773,10 @@ function App() {
                 Volver a Modo Normal
               </button>
 
+              
               <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
+                
+                {/* Funciones de grabación y reproducción
                 <h3 style={{ fontSize: '16px', color: '#2c3e50', marginBottom: '8px' }}>
                   Matrices de Transformación Homogénea
                 </h3>
@@ -736,6 +829,83 @@ function App() {
                         ))}
                       </div>
                     ))}
+                  </div>
+                </div>
+                */}
+                <div style={{ marginBottom: '12px' }}>
+                  <h4 style={{ fontSize: '14px', color: '#040b12', margin: '8px 0' }}>
+                    Cinematica Directa (Posicion Actual)
+                  </h4>
+                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#2c3e50', backgroundColor: '#f8f9fa', padding: '8px', borderRadius: '4px' }}>
+                    <div>X: {forwardPosition.x.toFixed(2)} m</div>
+                    <div>Y: {forwardPosition.y.toFixed(2)} m</div>
+                    <div>Z: {forwardPosition.z.toFixed(2)} m</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <h4 style={{ fontSize: '14px', color: '#34495e', margin: '8px 0' }}>
+                    Cinematica Inversa (Objetivo)
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                    <input
+                      type="number"
+                      value={targetXInput}
+                      onChange={(e) => setTargetXInput(e.target.value)}
+                      placeholder="X"
+                      step="0.01"
+                      style={{ padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '12px' }}
+                    />
+                    <input
+                      type="number"
+                      value={targetYInput}
+                      onChange={(e) => setTargetYInput(e.target.value)}
+                      placeholder="Y"
+                      step="0.01"
+                      style={{ padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '12px' }}
+                    />
+                    <input
+                      type="number"
+                      value={targetZInput}
+                      onChange={(e) => setTargetZInput(e.target.value)}
+                      placeholder="Z"
+                      step="0.01"
+                      style={{ padding: '6px', borderRadius: '4px', border: '1px solid #bdc3c7', fontSize: '12px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={applyInverseKinematics}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#2980b9',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '12px',
+                        flex: 1
+                      }}
+                    >
+                      Aplicar IK
+                    </button>
+                    <button
+                      onClick={updateTargetFromCurrent}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#7f8c8d',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '12px',
+                        flex: 1
+                      }}
+                    >
+                      Usar Actual
+                    </button>
                   </div>
                 </div>
               </div>
@@ -881,7 +1051,7 @@ function App() {
               <button 
                 onClick={() => {
                   setRecordingStart({ 
-                    rotationArm1, 
+                    rotationArm1: ARM1_FIXED_ROTATION,
                     rotationArm2, 
                     armHeight, 
                     globalRotation,
@@ -1049,7 +1219,7 @@ function App() {
         <axesHelper args={[5]} />
         <group rotation={[0, globalRotation, 0]}>
           <SCARA 
-            rotationArm1={rotationArm1} 
+            rotationArm1={ARM1_FIXED_ROTATION} 
             rotationArm2={rotationArm2} 
             armHeight={armHeight}
             nekoTexture={nekoTexture}
