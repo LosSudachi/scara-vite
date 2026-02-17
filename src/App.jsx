@@ -24,9 +24,10 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
   return (
     <group>
       <group>
+        {/* Base del robot con barras de soporte */}
         <mesh position={[0, 0.25, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[1.5, 1.5, 0.5, 32]} />
-          <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.3} envMapIntensity={0.5} />
+          <meshStandardMaterial color="#888" metalness={0.8} roughness={0.3} envMapIntensity={0.5} />
         </mesh>
 
         {barPositions.map((pos, index) => (
@@ -35,11 +36,13 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
             <meshStandardMaterial color="#888" metalness={0.9} roughness={0.1} envMapIntensity={0.8} />
           </mesh>
         ))}
-
+        
+        {/* Segunda plataforma con barras de soporte 
         <mesh position={[0, 3.5, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[1.5, 1.5, 0.5, 32]} />
-          <meshStandardMaterial color="#666" metalness={0.7} roughness={0.2} envMapIntensity={0.7} />
+          <meshStandardMaterial color="#9a1f1f" metalness={0.7} roughness={0.2} envMapIntensity={0.7} />
         </mesh>
+        */}
 
         {barPositions.map((pos, index) => (
           <mesh key={`upper-${index}`} position={[pos.x, 5.0, pos.z]} castShadow>
@@ -64,7 +67,7 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
           </mesh>
           <mesh position={[0, -0.9, 0]} castShadow>
             <cylinderGeometry args={[0.8, 0.8, 0.4, 32]} />
-            <meshStandardMaterial color="#888" metalness={0.85} roughness={0.15} envMapIntensity={0.95} />
+            <meshStandardMaterial color="#201b41" metalness={0.85} roughness={0.15} envMapIntensity={0.95} />
           </mesh>
         </group>
 
