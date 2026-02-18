@@ -9,6 +9,34 @@ import nekoGif from './gifs/Neko.gif';
 import backGif from './gifs/Back.gif';
 import Feeling from './background/Feeling.gif';
 
+function AxisAnnotations() {
+
+  const axisStyle = {
+    fontSize: '14px',
+    fontWeight: 'bold',
+    color: '#000000',
+    background: 'rgba(250, 250, 250, 0)',
+    padding: '2px 6px',
+    borderRadius: '6px',
+    userSelect: 'none',
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
+    position: 'absolute',
+    zindex: 1,
+  };
+
+  return (
+    <>
+      <Html position={[10, 0, 0]} center><div style={axisStyle}>X +</div></Html>
+      <Html position={[-10, 0, 0]} center><div style={axisStyle}>X -</div></Html>
+      <Html position={[0, 6, 0]} center><div style={axisStyle}>Y +</div></Html>
+      <Html position={[0, -0.6, 0]} center><div style={axisStyle}>Y -</div></Html>
+      <Html position={[0, 0, 10]} center><div style={axisStyle}>Z +</div></Html>
+      <Html position={[0, 0, -10]} center><div style={axisStyle}>Z -</div></Html>
+    </>
+  );
+}
+
 function App() {
   const backgroundTexture = useLoader(TextureLoader, Feeling);
   const nekoTexture = useLoader(TextureLoader, nekoGif);
@@ -50,6 +78,7 @@ function App() {
         <pointLight position={[0, 15, 0]} intensity={1.5} color="#4466ff" distance={30} />
         <gridHelper args={[20, 20]} position={[0, 0, 0]} />
         <axesHelper args={[5]} />
+        <AxisAnnotations />
 
         <group rotation={[0, globalRotation, 0]}>
           <SCARA

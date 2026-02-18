@@ -1,4 +1,120 @@
 import React, { useRef } from 'react';
+import { Html } from '@react-three/drei';
+
+function Arm1VerticalAxisIndicator() {
+  return (
+    <group position={[2, -0.9, 0.65]}>
+      
+      <mesh position={[0, 0.5, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 0.7, 12]} />
+        <meshStandardMaterial color="#2ecc71" emissive="#1d8f4f" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[0, 0.83, 0]}>
+        <coneGeometry args={[0.08, 0.18, 12]} />
+        <meshStandardMaterial color="#2ecc71" emissive="#1d8f4f" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[0, -0.4, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 0.7, 12]} />
+        <meshStandardMaterial color="#a7321d" emissive="#1d8f4f" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[0, -0.73, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.08, 0.18, 12]} />
+        <meshStandardMaterial color="#a7321d" emissive="#1d8f4f" emissiveIntensity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+function BaseRotationIndicator() {
+  return (
+    <group position={[0, 0.62, 0]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.9, 0.04, 12, 90]} />
+        <meshStandardMaterial color="#f1c40f" emissive="#8a6d00" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[0, 0, 1.9]} rotation={[ 3.2, 0.05,-7.9]}>
+        <coneGeometry args={[0.12, 0.28, 12]} />
+        <meshStandardMaterial color="#f1c40f" emissive="#8a6d00" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[1.9, 0, 0]} rotation={[4.7, 0,0]}>
+        <coneGeometry args={[0.12, 0.28, 12]} />
+        <meshStandardMaterial color="#f1c40f" emissive="#8a6d00" emissiveIntensity={0.25} />
+      </mesh>
+
+      <mesh position={[0, 0.02, -2.2]}>
+        <planeGeometry args={[0.85, 0.28]} />
+        <meshBasicMaterial color="#111111" transparent opacity={0.75} side={2} />
+      </mesh>
+
+      <mesh position={[0, 0.03, -2.2]}>
+        <ringGeometry args={[0.09, 0.11, 24]} />
+        <meshBasicMaterial color="#f1c40f" side={2} />
+      </mesh>
+
+      <Html position={[0, 0.16, -2.2]} center>
+        <div
+          style={{
+            fontSize: '12px',
+            fontWeight: 'bold',
+            color: '#f1c40f',
+            background: 'rgba(0, 0, 0, 0.65)',
+            padding: '2px 6px',
+            borderRadius: '6px',
+            whiteSpace: 'nowrap',
+            userSelect: 'none',
+            pointerEvents: 'none'
+          }}
+        >
+          360°
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+function JointRotationIndicator() {
+  return (
+    <group position={[0.1, -1.6, 0]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.58, 0.025, 10, 72]} />
+        <meshStandardMaterial color="#f39c12" emissive="#8a4b00" emissiveIntensity={0.3} />
+      </mesh>
+
+      <mesh position={[0, 0, 0.58]} rotation={[3.2, 0.05, -7.9]}>
+        <coneGeometry args={[0.07, 0.16, 12]} />
+        <meshStandardMaterial color="#f39c12" emissive="#8a4b00" emissiveIntensity={0.3} />
+      </mesh>
+
+      <mesh position={[0.58, 0, 0]} rotation={[4.7, 0, 0]}>
+        <coneGeometry args={[0.07, 0.16, 12]} />
+        <meshStandardMaterial color="#f39c12" emissive="#8a4b00" emissiveIntensity={0.3} />
+      </mesh>
+
+      <Html position={[0, 0.12, -0.78]} center>
+        <div
+          style={{
+            fontSize: '10px',
+            fontWeight: 'bold',
+            color: '#f39c12',
+            background: 'rgba(0, 0, 0, 0.65)',
+            padding: '2px 6px',
+            borderRadius: '6px',
+            whiteSpace: 'nowrap',
+            userSelect: 'none',
+            pointerEvents: 'none'
+          }}
+        >
+          360°
+        </div>
+      </Html>
+    </group>
+  );
+}
 
 function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture, isFalling, nekoAttachedRef, endEffectorRef }) {
   const arm1Ref = useRef();
@@ -20,6 +136,7 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
           <cylinderGeometry args={[1.5, 1.5, 0.5, 32]} />
           <meshStandardMaterial color="#888" metalness={0.8} roughness={0.3} envMapIntensity={0.5} />
         </mesh>
+        <BaseRotationIndicator />
 
         {barPositions.map((pos, index) => (
           <mesh key={`lower-${index}`} position={[pos.x, 2.0, pos.z]} castShadow>
@@ -60,6 +177,7 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
             <boxGeometry args={[5, 0.4, 1]} />
             <meshStandardMaterial color="#3498db" metalness={0.4} roughness={0.3} envMapIntensity={0.8} />
           </mesh>
+          <Arm1VerticalAxisIndicator />
         </group>
 
         <group position={[Math.cos(rotationArm1) * 4, Math.sin(rotationArm1) * 4 + armHeight, 0]}>
@@ -68,6 +186,7 @@ function SCARA({ rotationArm1, rotationArm2, armHeight, nekoTexture, backTexture
               <cylinderGeometry args={[0.3, 0.3, 1, 32]} />
               <meshStandardMaterial color="#999" metalness={0.9} roughness={0.1} envMapIntensity={1} />
             </mesh>
+            <JointRotationIndicator />
 
             <group ref={arm2Ref} position={[0.9, -1.98, 1.2]} rotation={[0, -1, 0]}>
               <mesh castShadow>
